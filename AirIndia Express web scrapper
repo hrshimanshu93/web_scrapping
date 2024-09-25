@@ -1,0 +1,56 @@
+import openpyxl
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from time import sleep
+
+# Load the input Excel file
+input_file_path = r'C:\Users\Himanshu\Downloads\IX_DATA1.xlsx'
+workbook = openpyxl.load_workbook(input_file_path)
+sheet = workbook.active
+
+# Initialize the Chrome WebDriver
+driver = webdriver.Chrome()
+
+# Iterate through the rows in the Excel file
+for row in sheet.iter_rows(min_row=2, min_col=1, max_col=3, values_only=True):
+    airline_pnr, pax_first_name, pax_last_name = row
+
+    # Construct the URL with the last name and PNR
+    url = f'https://www.airindiaexpress.in/manage?&recordLocator={airline_pnr}&addtnlDetail={pax_last_name}'
+
+    # Make a GET request to the URL
+    driver.get(url)
+    sleep(2)  # Add a delay to allow the page to load
+
+    # Parse the HTML content using BeautifulSoup
+    soup = BeautifulSoup(driver.page_source, 'html.parser')
+
+    # Extract booking status
+    booking_status = soup.find('div', class_='cancel-refund-title')
+    if booking_status is None:
+        booking_status = soup.find('strong').text
+    else:
+        booking_status = booking_status.text
+
+    if booking_status != "Booking Cancelled":
+        # Extract payment status
+        refund_amount = soup.find('span', class_='item-value').text
+
+        # Extract payment details
+        airfare_cost = soup.find('span', class_='heading-component-amount').text
+        other_fees_taxes = [item.text for item in soup.find_all('span', class_='heading-component-amount')]
+    else:
+        refund_amount = soup.find('span', class_='item-value').text
+
+   # Write the extracted data back to the Excel file
+    sheet.cell(row=sheet.max_row + 1, column=4, value=booking_status)
+    sheet.cell(row=sheet.max_row, column=5, value=refund_amount)
+    sheet.cell(row=sheet.max_row, column=6, value=airfare_cost)
+    sheet.cell(row=sheet.max_row, column=7, value=', '.join(other_fees_taxes))
+
+# Save the updated Excel file
+output_file_path = 'output.xlsx'
+workbook.save(output_file_path)
+
+# Quit the WebDriver
+driver.quit()
